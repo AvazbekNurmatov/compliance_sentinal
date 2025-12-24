@@ -1,0 +1,11 @@
+streamlit
+langchain
+chromadb
+pdfplumber
+pypdf
+requests
+tqdm
+python-multipart
+fastapi    # optional for API
+uvicorn
+
