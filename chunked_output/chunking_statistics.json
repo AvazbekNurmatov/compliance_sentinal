@@ -1,0 +1,17 @@
+{
+  "total_chunks": 11825,
+  "total_documents": 9,
+  "avg_chunks_per_doc": 1313.888888888889,
+  "avg_words_per_chunk": 34.943340380549685,
+  "language_distribution": {
+    "Uzbek": 10469,
+    "Russian": 1356
+  },
+  "compliance_distribution": {
+    "interest_rate": 118,
+    "collateral": 318,
+    "mandatory_disclosure": 3,
+    "pre_selected": 0,
+    "language_requirement": 0
+  }
+}
