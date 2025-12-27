@@ -7,6 +7,10 @@
     "Uzbek": 10469,
     "Russian": 1356
   },
+  "script_distribution": {
+    "Cyrillic": 10941,
+    "Latin": 884
+  },
   "compliance_distribution": {
     "interest_rate": 118,
     "collateral": 318,

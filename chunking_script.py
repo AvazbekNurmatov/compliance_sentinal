@@ -13,6 +13,7 @@ class ParagraphDocumentChunker:
     - New line with sentence start (capital letter) = new chunk
     - Line with 2+ leading spaces = new chunk
     - Section headers are NOT included in chunk text
+    - Stores both Latin and Cyrillic versions
     """
     
     def __init__(self, metadata_csv_path: str):
@@ -35,6 +36,61 @@ class ParagraphDocumentChunker:
             'pre_selected': ['по умолчанию', 'avtomatik tanlangan', 'автоматик танланган', '☑', '✓'],
             'language_requirement': ['государственный язык', 'davlat tili', 'давлат тили']
         }
+        
+        # Latin to Cyrillic mapping for Uzbek
+        self.latin_to_cyrillic = {
+            'a': 'а', 'b': 'б', 'v': 'в', 'd': 'д', 'e': 'е', 'f': 'ф',
+            'g': 'г', 'h': 'ҳ', 'i': 'и', 'j': 'ж', 'k': 'к', 'l': 'л',
+            'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'q': 'қ', 'r': 'р',
+            's': 'с', 't': 'т', 'u': 'у', 'v': 'в', 'x': 'х', 'y': 'й',
+            'z': 'з', "o'": 'ў', "g'": 'ғ', 'sh': 'ш', 'ch': 'ч', 'ng': 'нг',
+            'A': 'А', 'B': 'Б', 'V': 'В', 'D': 'Д', 'E': 'Е', 'F': 'Ф',
+            'G': 'Г', 'H': 'Ҳ', 'I': 'И', 'J': 'Ж', 'K': 'К', 'L': 'Л',
+            'M': 'М', 'N': 'Н', 'O': 'О', 'P': 'П', 'Q': 'Қ', 'R': 'Р',
+            'S': 'С', 'T': 'Т', 'U': 'У', 'V': 'В', 'X': 'Х', 'Y': 'Й',
+            'Z': 'З', "O'": 'Ў', "G'": 'Ғ', 'Sh': 'Ш', 'Ch': 'Ч', 'Ng': 'Нг',
+            'SH': 'Ш', 'CH': 'Ч', 'NG': 'НГ'
+        }
+        
+        # Cyrillic to Latin mapping for Uzbek
+        self.cyrillic_to_latin = {v: k for k, v in self.latin_to_cyrillic.items()}
+    
+    def detect_script(self, text: str) -> str:
+        """Detect if text is Latin or Cyrillic."""
+        cyrillic_chars = sum(1 for c in text if '\u0400' <= c <= '\u04FF')
+        latin_chars = sum(1 for c in text if 'a' <= c.lower() <= 'z')
+        
+        if cyrillic_chars > latin_chars:
+            return 'Cyrillic'
+        return 'Latin'
+    
+    def transliterate_latin_to_cyrillic(self, text: str) -> str:
+        """Convert Latin Uzbek to Cyrillic."""
+        result = text
+        
+        # Replace digraphs first (order matters)
+        for lat, cyr in [('sh', 'ш'), ('ch', 'ч'), ('ng', 'нг'), 
+                         ('Sh', 'Ш'), ('Ch', 'Ч'), ('Ng', 'Нг'),
+                         ('SH', 'Ш'), ('CH', 'Ч'), ('NG', 'НГ'),
+                         ("o'", 'ў'), ("g'", 'ғ'), ("O'", 'Ў'), ("G'", 'Ғ')]:
+            result = result.replace(lat, cyr)
+        
+        # Replace single characters
+        for lat, cyr in self.latin_to_cyrillic.items():
+            if len(lat) == 1:
+                result = result.replace(lat, cyr)
+        
+        return result
+    
+    def transliterate_cyrillic_to_latin(self, text: str) -> str:
+        """Convert Cyrillic Uzbek/Russian to Latin."""
+        result = text
+        
+        # Replace Cyrillic characters
+        for cyr, lat in self.cyrillic_to_latin.items():
+            result = result.replace(cyr, lat)
+        
+        return result
     
     def chunk_all_documents(self, output_dir: str = 'chunked_output'):
         """Process all active documents."""
@@ -42,12 +98,13 @@ class ParagraphDocumentChunker:
         output_path.mkdir(exist_ok=True)
         
         print("="*80)
-        print("STRICT PARAGRAPH-BASED CHUNKING")
+        print("STRICT PARAGRAPH-BASED CHUNKING WITH TRANSLITERATION")
         print("="*80)
         print("Rules:")
         print("  - New line + capital letter = new chunk")
         print("  - Line with 2+ leading spaces = new chunk")
         print("  - Section headers excluded from chunks")
+        print("  - Stores both Latin and Cyrillic versions")
         print("="*80)
         
         active_docs = self.metadata_df[self.metadata_df['Status'] == 'Active'].copy()
@@ -181,8 +238,18 @@ class ParagraphDocumentChunker:
     def create_chunk(self, paragraph_text: str, chunk_index: int,
                     metadata_row: pd.Series, total_chunks: int,
                     section_number: str) -> Dict:
-        """Create enriched chunk."""
+        """Create enriched chunk with transliteration."""
         hotspots = self.detect_compliance_hotspots(paragraph_text)
+        
+        # Detect script and create both versions
+        detected_script = self.detect_script(paragraph_text)
+        
+        if detected_script == 'Latin':
+            chunk_text_latin = paragraph_text
+            chunk_text_cyrillic = self.transliterate_latin_to_cyrillic(paragraph_text)
+        else:  # Cyrillic
+            chunk_text_cyrillic = paragraph_text
+            chunk_text_latin = self.transliterate_cyrillic_to_latin(paragraph_text)
         
         return {
             'chunk_id': f"{metadata_row['Filename'].replace('.pdf', '')}__chunk_{chunk_index}",
@@ -196,7 +263,9 @@ class ParagraphDocumentChunker:
             'chunk_index': chunk_index,
             'total_chunks': total_chunks,
             'chunk_position': f"{chunk_index + 1}/{total_chunks}",
-            'chunk_text': paragraph_text,
+            'chunk_text_latin': chunk_text_latin,
+            'chunk_text_cyrillic': chunk_text_cyrillic,
+            'detected_script': detected_script,
             'chunk_length': len(paragraph_text),
             'chunk_words': len(paragraph_text.split()),
             'contains_interest_rate': hotspots['interest_rate'],
@@ -230,7 +299,7 @@ class ParagraphDocumentChunker:
         
         key_cols = [
             'chunk_id', 'document_filename', 'document_date', 'document_language',
-            'section_number', 'chunk_words', 'compliance_flags'
+            'section_number', 'detected_script', 'chunk_words', 'compliance_flags'
         ]
         chunks_df[key_cols].to_csv(csv_file, index=False, encoding='utf-8')
         print(f"✓ Saved: {csv_file}")
@@ -243,12 +312,16 @@ class ParagraphDocumentChunker:
             'avg_chunks_per_doc': len(self.chunks_output) / max(1, len(self.metadata_df[self.metadata_df['Status'] == 'Active'])),
             'avg_words_per_chunk': sum(c['chunk_words'] for c in self.chunks_output) / max(1, len(self.chunks_output)),
             'language_distribution': {},
+            'script_distribution': {},
             'compliance_distribution': {}
         }
         
         for chunk in self.chunks_output:
             lang = chunk['document_language']
             stats['language_distribution'][lang] = stats['language_distribution'].get(lang, 0) + 1
+            
+            script = chunk['detected_script']
+            stats['script_distribution'][script] = stats['script_distribution'].get(script, 0) + 1
         
         for category in self.compliance_keywords.keys():
             count = sum(1 for c in self.chunks_output if c.get(f'contains_{category}', False))
@@ -269,6 +342,10 @@ class ParagraphDocumentChunker:
         print(f"\n📊 By language:")
         for lang, count in stats['language_distribution'].items():
             print(f"  {lang}: {count}")
+        
+        print(f"\n📝 By script:")
+        for script, count in stats['script_distribution'].items():
+            print(f"  {script}: {count}")
         
         print(f"\n🚨 Compliance hotspots:")
         for cat, count in stats['compliance_distribution'].items():

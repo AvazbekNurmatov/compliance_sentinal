@@ -1,1 +1,19 @@
 .env
+# Large AI/Data artifacts
+embeddings/
+index/
+chunked_output/
+*.npy
+*.json
+
+# If you want to keep specific JSON files (like config), 
+# you can negate them like this:
+# !config.json
+
+# Databases
+*.sqlite3
+
+# Python/Environment
+__pycache__/
+.env
+.venv/
